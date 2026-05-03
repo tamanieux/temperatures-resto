@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Températures Restaurant</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+    padding: 1rem;
+    min-height: 100vh;
+  }
+
+  header {
+    text-align: center;
+    padding: 1.5rem 0 1rem;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1a202c;
+  }
+
+  header p {
+    font-size: 0.85rem;
+    color: #718096;
+    margin-top: 0.25rem;
+  }
+
+  .capteurs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    max-width: 1100px;
+    margin: 1rem auto;
+  }
+
+  .carte {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border-left: 4px solid #48bb78;
+  }
+
+  .carte.alerte {
+    border-left-color: #fc8181;
+  }
+
+  .carte.chargement {
+    border-left-color: #a0aec0;
+  }
+
+  .carte-titre {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .carte-titre h2 {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: #c6f6d5;
+    color: #276749;
+  }
+
+  .badge.alerte {
+    background: #fed7d7;
+    color: #9b2c2c;
+  }
+
+  .badge.attente {
+    background: #e2e8f0;
+    color: #4a5568;
+  }
+
+  .temp-principale {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .temp-plage {
+    font-size: 0.8rem;
+    color: #718096;
+    margin-bottom: 1rem;
+  }
+
+  .batterie-ligne {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .batterie-barre-fond {
+    flex: 1;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .batterie-barre {
+    height: 100%;
+    border-radius: 99px;
+    background: #48bb78;
+    transition: width 0.5s;
+  }
+
+  .batterie-barre.faible {
+    background: #fc8181;
+  }
+
+  .batterie-barre.moyen {
+    background: #f6ad55;
+  }
+
+  .batterie-pct {
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-width: 36px;
+    text-align: right;
+    color: #4a5568;
+  }
+
+  .derniere-mesure {
+    font-size: 0.75rem;
+    color: #a0aec0;
+    margin-top: 0.75rem;
+  }
+
+  /* Tableau historique */
+  .historique {
+    max-width: 1100px;
+    margin: 1.5rem auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+
+  .historique-titre {
+    padding: 1rem 1.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .filtre-capteur {
+    font-size: 0.85rem;
+    font-weight: 400;
+    padding: 4px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    color: #4a5568;
+    cursor: pointer;
+  }
+
+  .tableau-wrapper {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  th {
+    background: #f7fafc;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #718096;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f0f4f8;
+    color: #2d3748;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr.ligne-alerte td { background: #fff5f5; }
+
+  .temp-cell { font-weight: 600; }
+  .temp-cell.ok { color: #276749; }
+  .temp-cell.hors { color: #9b2c2c; }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .dot.ok { background: #48bb78; }
+  .dot.hors { background: #fc8181; }
+
+  footer {
+    text-align: center;
+    padding: 2rem 0 1rem;
+    font-size: 0.75rem;
+    color: #a0aec0;
+  }
+
+  .btn-refresh {
+    background: #4299e1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .btn-refresh:hover { background: #3182ce; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e2e8f0;
+    border-top-color: #4299e1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Suivi températures</h1>
+  <p id="derniere-maj">Chargement...</p>
+</header>
+
+<div class="capteurs" id="capteurs"></div>
+
+<div class="historique">
+  <div class="historique-titre">
+    <span>Historique 10 derniers jours</span>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select class="filtre-capteur" id="filtre" onchange="filtrerTableau()">
+        <option value="tous">Tous les capteurs</option>
+        <option value="Congelo_Glace">Congélo Glace</option>
+        <option value="Grand_Frigo">Grand Frigo</option>
+        <option value="Grand_Congelo">Grand Congélo</option>
+        <option value="Petit_Frigo">Petit Frigo</option>
+      </select>
+      <button class="btn-refresh" onclick="chargerDonnees()">Actualiser</button>
+    </div>
+  </div>
+  <div class="tableau-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Heure</th>
+          <th>Capteur</th>
+          <th>Température</th>
+          <th>Batterie</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody id="tableau-body">
+        <tr><td colspan="6" style="text-align:center;padding:2rem;color:#a0aec0;"><span class="spinner"></span>Chargement...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer>
+  Données via ThingSpeak — Mise à jour toutes les 4h
+</footer>
+
+<script>
+// ============================================================
+//  CONFIG — mets tes vraies clés READ API ici
+// ============================================================
+const CAPTEURS = [
+  {
+    nom: "Congélo Glace",
+    cle: "Congelo_Glace",
+    channelId: "3366997",
+    readKey: "ONL3MBX7COEX3PC8",
+    tempMin: -20,
+    tempMax: -16,
+    unite: "°C"
+  },
+  {
+    nom: "Grand Frigo",
+    cle: "Grand_Frigo",
+    channelId: "3366960",
+    readKey: "BOKT300VPN70OLOW",
+    tempMin: 2,
+    tempMax: 6,
+    unite: "°C"
+  },
+  {
+    nom: "Grand Congélo",
+    cle: "Grand_Congelo",
+    channelId: "3366990",
+    readKey: "K5B0RGCTZ54ORXXU",
+    tempMin: -22,
+    tempMax: -18,
+    unite: "°C"
+  },
+  {
+    nom: "Petit Frigo",
+    cle: "Petit_Frigo",
+    channelId: "3366995",
+    readKey: "1F8KLES48EWK0TGK",
+    tempMin: 2,
+    tempMax: 6,
+    unite: "°C"
+  }
+];
+
+let toutesLesDonnees = [];
+
+// ============================================================
+//  CARTES CAPTEURS
+// ============================================================
+function afficherCartes(capteurs) {
+  const container = document.getElementById("capteurs");
+  container.innerHTML = capteurs.map(c => `
+    <div class="carte chargement" id="carte-${c.channelId}">
+      <div class="carte-titre">
+        <h2>${c.nom}</h2>
+        <span class="badge attente" id="badge-${c.channelId}">Chargement</span>
+      </div>
+      <div class="temp-principale" id="temp-${c.channelId}">--°C</div>
+      <div class="temp-plage">Plage : ${c.tempMin}°C à ${c.tempMax}°C</div>
+      <div class="batterie-ligne">
+        <div class="batterie-barre-fond">
+          <div class="batterie-barre" id="barre-${c.channelId}" style="width:0%"></div>
+        </div>
+        <span class="batterie-pct" id="pct-${c.channelId}">--%</span>
+      </div>
+      <div class="derniere-mesure" id="mesure-${c.channelId}">En attente de données...</div>
+    </div>
+  `).join("");
+}
+
+function mettreAJourCarte(capteur, feed) {
+  if (!feed || !feed.feeds || feed.feeds.length === 0) return;
+
+  const derniere = feed.feeds[feed.feeds.length - 1];
+  const temp = parseFloat(derniere.field1);
+  const vbat = parseFloat(derniere.field2);
+  const pct  = parseInt(derniere.field3);
+
+  const estOk = temp >= capteur.tempMin && temp <= capteur.tempMax;
+  const date  = new Date(derniere.created_at);
+  const dateStr = date.toLocaleDateString("fr-FR") + " " + date.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+
+  const carte  = document.getElementById(`carte-${capteur.channelId}`);
+  const badge  = document.getElementById(`badge-${capteur.channelId}`);
+  const tempEl = document.getElementById(`temp-${capteur.channelId}`);
+  const barre  = document.getElementById(`barre-${capteur.channelId}`);
+  const pctEl  = document.getElementById(`pct-${capteur.channelId}`);
+  const mesure = document.getElementById(`mesure-${capteur.channelId}`);
+
+  carte.className  = `carte ${estOk ? "" : "alerte"}`;
+  badge.className  = `badge ${estOk ? "" : "alerte"}`;
+  badge.textContent = estOk ? "Normal" : "ALERTE";
+  tempEl.textContent = isNaN(temp) ? "--°C" : temp.toFixed(1) + "°C";
+
+  const pctVal = isNaN(pct) ? 0 : pct;
+  barre.style.width = pctVal + "%";
+  barre.className = `batterie-barre ${pctVal < 20 ? "faible" : pctVal < 50 ? "moyen" : ""}`;
+  pctEl.textContent = isNaN(pct) ? "--%": pct + "%";
+  mesure.textContent = "Dernière mesure : " + dateStr;
+}
+
+// ============================================================
+//  TABLEAU HISTORIQUE
+// ============================================================
+function remplirTableau(donnees) {
+  const tbody = document.getElementById("tableau-body");
+
+  if (donnees.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:#a0aec0;">Aucune donnée disponible</td></tr>`;
+    return;
+  }
+
+  // Trier par date décroissante
+  donnees.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  tbody.innerHTML = donnees.map(d => {
+    const date   = new Date(d.date);
+    const dateStr = date.toLocaleDateString("fr-FR");
+    const heureStr = date.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+    const estOk  = d.temp >= d.tempMin && d.temp <= d.tempMax;
+
+    return `
+      <tr class="${estOk ? "" : "ligne-alerte"}">
+        <td>${dateStr}</td>
+        <td>${heureStr}</td>
+        <td>${d.nomCapteur}</td>
+        <td class="temp-cell ${estOk ? "ok" : "hors"}">${d.temp.toFixed(1)}°C</td>
+        <td>${d.pct}% (${d.vbat.toFixed(2)}V)</td>
+        <td><span class="dot ${estOk ? "ok" : "hors"}"></span>${estOk ? "Normal" : "Hors plage"}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function filtrerTableau() {
+  const filtre = document.getElementById("filtre").value;
+  const donneesFiltrees = filtre === "tous"
+    ? toutesLesDonnees
+    : toutesLesDonnees.filter(d => d.cleInterne === filtre);
+  remplirTableau(donneesFiltrees);
+}
+
+// ============================================================
+//  CHARGEMENT DONNÉES THINGSPEAK
+// ============================================================
+async function chargerCapteur(capteur) {
+  try {
+    // Récupère les 240 dernières entrées (~10 jours à 1 mesure/4h)
+    const url = `https://api.thingspeak.com/channels/${capteur.channelId}/feeds.json?api_key=${capteur.readKey}&results=240`;
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    // Mettre à jour la carte
+    mettreAJourCarte(capteur, data);
+
+    // Ajouter à l'historique global
+    if (data.feeds) {
+      data.feeds.forEach(f => {
+        const temp = parseFloat(f.field1);
+        const vbat = parseFloat(f.field2);
+        const pct  = parseInt(f.field3);
+        if (!isNaN(temp)) {
+          toutesLesDonnees.push({
+            date: f.created_at,
+            nomCapteur: capteur.nom,
+            cleInterne: capteur.cle,
+            temp, vbat, pct,
+            tempMin: capteur.tempMin,
+            tempMax: capteur.tempMax
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.error("Erreur chargement " + capteur.nom, e);
+  }
+}
+
+async function chargerDonnees() {
+  toutesLesDonnees = [];
+  document.getElementById("tableau-body").innerHTML =
+    `<tr><td colspan="6" style="text-align:center;padding:2rem;color:#a0aec0;"><span class="spinner"></span>Chargement...</td></tr>`;
+
+  await Promise.all(CAPTEURS.map(c => chargerCapteur(c)));
+
+  filtrerTableau();
+
+  const maintenant = new Date();
+  document.getElementById("derniere-maj").textContent =
+    "Mis à jour le " + maintenant.toLocaleDateString("fr-FR") +
+    " à " + maintenant.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+}
+
+// ============================================================
+//  DÉMARRAGE
+// ============================================================
+afficherCartes(CAPTEURS);
+chargerDonnees();
+
+// Actualisation auto toutes les 15 minutes
+setInterval(chargerDonnees, 15 * 60 * 1000);
+</script>
+
+</body>
+</html>
