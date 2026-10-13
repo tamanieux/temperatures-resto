@@ -56,6 +56,26 @@
     border-left-color: #a0aec0;
   }
 
+  .carte.horsligne {
+    border-left-color: #718096;
+    background: #f7fafc;
+  }
+
+  .carte.horsligne .temp-principale {
+    color: #a0aec0;
+    text-decoration: line-through;
+  }
+
+  .alerte-horsligne {
+    background: #edf2f7;
+    color: #4a5568;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
   .carte-titre {
     display: flex;
     justify-content: space-between;
@@ -80,6 +100,11 @@
   .badge.alerte {
     background: #fed7d7;
     color: #9b2c2c;
+  }
+
+  .badge.horsligne {
+    background: #4a5568;
+    color: white;
   }
 
   .badge.attente {
@@ -344,6 +369,9 @@ const CAPTEURS = [
   }
 ];
 
+// Un capteur est considéré hors ligne s'il n'a rien envoyé depuis plus de X heures
+const SEUIL_HORS_LIGNE_HEURES = 24;
+
 let toutesLesDonnees = [];
 
 // ============================================================
@@ -357,6 +385,7 @@ function afficherCartes(capteurs) {
         <h2>${c.nom}</h2>
         <span class="badge attente" id="badge-${c.channelId}">Chargement</span>
       </div>
+      <div class="alerte-horsligne" id="horsligne-${c.channelId}" style="display:none"></div>
       <div class="temp-principale" id="temp-${c.channelId}">--°C</div>
       <div class="temp-plage">Plage : ${c.tempMin}°C à ${c.tempMax}°C</div>
       <div class="batterie-ligne">
@@ -370,8 +399,24 @@ function afficherCartes(capteurs) {
   `).join("");
 }
 
+function marquerHorsLigne(capteur, message, derniereDate) {
+  const carte  = document.getElementById(`carte-${capteur.channelId}`);
+  const badge  = document.getElementById(`badge-${capteur.channelId}`);
+  const alerte = document.getElementById(`horsligne-${capteur.channelId}`);
+  carte.className   = "carte horsligne";
+  badge.className   = "badge horsligne";
+  badge.textContent = "HORS LIGNE";
+  alerte.style.display = "block";
+  alerte.textContent   = message;
+}
+
 function mettreAJourCarte(capteur, feed) {
-  if (!feed || !feed.feeds || feed.feeds.length === 0) return;
+  // Aucune donnée du tout sur ce canal
+  if (!feed || !feed.feeds || feed.feeds.length === 0) {
+    marquerHorsLigne(capteur, "Capteur hors ligne : aucune donnée reçue");
+    document.getElementById(`mesure-${capteur.channelId}`).textContent = "Aucune mesure disponible";
+    return;
+  }
 
   const derniere = feed.feeds[feed.feeds.length - 1];
   const temp = parseFloat(derniere.field1);
@@ -382,16 +427,18 @@ function mettreAJourCarte(capteur, feed) {
   const date  = new Date(derniere.created_at);
   const dateStr = date.toLocaleDateString("fr-FR") + " " + date.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
 
+  // Ancienneté de la dernière mesure
+  const ageHeures = (Date.now() - date.getTime()) / 3600000;
+  const horsLigne = ageHeures > SEUIL_HORS_LIGNE_HEURES;
+
   const carte  = document.getElementById(`carte-${capteur.channelId}`);
   const badge  = document.getElementById(`badge-${capteur.channelId}`);
+  const alerte = document.getElementById(`horsligne-${capteur.channelId}`);
   const tempEl = document.getElementById(`temp-${capteur.channelId}`);
   const barre  = document.getElementById(`barre-${capteur.channelId}`);
   const pctEl  = document.getElementById(`pct-${capteur.channelId}`);
   const mesure = document.getElementById(`mesure-${capteur.channelId}`);
 
-  carte.className  = `carte ${estOk ? "" : "alerte"}`;
-  badge.className  = `badge ${estOk ? "" : "alerte"}`;
-  badge.textContent = estOk ? "Normal" : "ALERTE";
   tempEl.textContent = isNaN(temp) ? "--°C" : temp.toFixed(1) + "°C";
 
   const pctVal = isNaN(pct) ? 0 : pct;
@@ -399,6 +446,18 @@ function mettreAJourCarte(capteur, feed) {
   barre.className = `batterie-barre ${pctVal < 20 ? "faible" : pctVal < 50 ? "moyen" : ""}`;
   pctEl.textContent = isNaN(pct) ? "--%": pct + "%";
   mesure.textContent = "Dernière mesure : " + dateStr;
+
+  if (horsLigne) {
+    const jours = Math.floor(ageHeures / 24);
+    const duree = jours >= 1 ? `${jours} jour${jours > 1 ? "s" : ""}` : `${Math.floor(ageHeures)} h`;
+    marquerHorsLigne(capteur, `Capteur hors ligne : aucun message depuis ${duree}`);
+    return;
+  }
+
+  alerte.style.display = "none";
+  carte.className  = `carte ${estOk ? "" : "alerte"}`;
+  badge.className  = `badge ${estOk ? "" : "alerte"}`;
+  badge.textContent = estOk ? "Normal" : "ALERTE";
 }
 
 // ============================================================
